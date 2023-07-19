@@ -47,6 +47,11 @@ class HtmlResults():
         r_b = (color_b[2] - color_a[2]) * alpha + color_a[2]
         return (r_r, r_g, r_b)
 
+    def is_assembly_label(self, string):
+        if ":" in string:
+            return string
+        return "   " + string
+
     def render(self, filepath):
         doc, tag, text = Doc().tagtext()
         with tag("style"):
@@ -102,13 +107,13 @@ class HtmlResults():
                 padding: 0 !important;
             }
 
-            .pseudocode-tab {
+            .pseudocode-tab .assembly-tab{
                 position: relative;
                 border-radius: 20px;
                 margin-top: 30px;
             }
 
-            .pseudocode-tab > span {
+            .pseudocode-tab > span, .assembly-tab > span  {
                 display: block;
                 width: 100%;
                 overflow: hidden;
@@ -123,11 +128,11 @@ class HtmlResults():
             }
 
             span.deleted {
-                background-color: #301a1f;
+                background-color: #45242c;
             }
 
             span.added {
-                background-color: #12261e;
+                background-color: #143223;
             }
 
             .nav-pills a.nav-link.active, .nav-pills .show>a.nav-link {
@@ -223,6 +228,10 @@ class HtmlResults():
                                             pseudo2 = None
                                             if details2["prototype"] and details2["pseudocode"]:
                                                 pseudo2 = details2["prototype"] + "\n" + details2["pseudocode"]
+                                            # get assembly
+                                            if details1["assembly"] and details2["assembly"]:
+                                                assembly1 = details1["assembly"]
+                                                assembly2 = details2["assembly"]
 
                                             changes = []
                                             if pseudo1 and pseudo2:
@@ -232,17 +241,25 @@ class HtmlResults():
                                                 )
                                                 changes = [d for d in diff]
 
+                                            assembly_changes = []
+                                            if assembly1 and assembly2:
+                                                assembly_diff = DifflibParser(
+                                                    [f"{l}\n" for l in assembly1.split("\n")],
+                                                    [f"{l}\n" for l in assembly2.split("\n")],
+                                                )
+                                                assembly_changes = [d for d in assembly_diff]
+
                                             # Tabs
                                             with tag("nav", klass="nav nav-pills justify-content-center", style="margin-bottom: 20px;"):
-                                                for j, tab in enumerate(["Pseudocode", "Assembly", "Callgraph"]):
+                                                for j, tab in enumerate(["Pseudocode", "Assembly"]):
                                                     cls = "nav-link"
                                                     if j == 0:
                                                         cls += " active"
-                                                    with tag("a", ("data-toggle", "tab"), klass=cls, href=f"#diff-{i}-{tab.lower()}"):
+                                                    with tag("a", ("data-bs-toggle", "tab"), klass=cls, href=f"#diff-{i}-{tab.lower()}"):
                                                         text(tab)
                                             # Tabs content
                                             with tag("div", klass="tab-content"):
-                                                for j, tab in enumerate(["Pseudocode", "Assembly", "Callgraph"]):
+                                                for j, tab in enumerate(["Pseudocode", "Assembly"]):
                                                     cls = "tab-pane"
                                                     if j == 0:
                                                         cls += " active"
@@ -277,7 +294,33 @@ class HtmlResults():
                                                                                     text("\n")
 
                                                     elif tab == "Assembly":
-                                                        pass
+                                                        if not assembly1 or not assembly2:
+                                                            cls += " disabled"
+
+                                                        with tag("div", klass=cls, id=f"diff-{i}-{tab.lower()}"):
+                                                            with tag("div", klass="row"):
+                                                                for side in [DiffCode.LEFTONLY, DiffCode.RIGHTONLY]:
+                                                                    cls = "col-md-6"
+                                                                    with tag("pre", klass=f"col-md-6 {tab.lower()}-tab"):
+                                                                        for assembly_change in assembly_changes:
+                                                                            if assembly_change["code"] == DiffCode.SIMILAR:
+                                                                                with tag("span", klass="equal"):
+                                                                                    text(self.is_assembly_label(assembly_change["line"]))
+                                                                            elif assembly_change["code"] == side:
+                                                                                with tag(
+                                                                                    "span",
+                                                                                    klass=f"{'deleted' if side == DiffCode.LEFTONLY else 'added'}"
+                                                                                ):
+                                                                                    text(self.is_assembly_label(assembly_change["line"]))
+                                                                            elif assembly_change["code"] == DiffCode.CHANGED and side == DiffCode.LEFTONLY:
+                                                                                with tag("span", klass="deleted"):
+                                                                                    text(self.is_assembly_label(assembly_change["line"]))
+                                                                            elif assembly_change["code"] == DiffCode.CHANGED and side == DiffCode.RIGHTONLY:
+                                                                                with tag("span", klass="added"):
+                                                                                    text(self.is_assembly_label(assembly_change["newline"]))
+                                                                            else:
+                                                                                with tag("span", klass="blank"):
+                                                                                    text("\n")
 
                                                     elif tab == "Callgraph":
                                                         pass
